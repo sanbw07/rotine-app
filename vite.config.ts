@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  base: '', // Isso força o Vite a usar caminhos relativos (./) em tudo
+  // Use o nome EXATO do seu repositório no GitHub entre barras
+  base: '/rotine-app/', 
   plugins: [react()],
 })

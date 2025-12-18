@@ -34,9 +34,9 @@ const App: React.FC = () => {
 
   // Carregar a biblioteca XLSX dinamicamente e injetar fonte Inter
   useEffect(() => {
-    // Injetar Link da Fonte Inter
+    // Injetar Link da Fonte Open Sans
     const fontLink = document.createElement('link');
-    fontLink.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700;800;900&display=swap";
     fontLink.rel = "stylesheet";
     document.head.appendChild(fontLink);
 
@@ -211,11 +211,11 @@ const App: React.FC = () => {
   }).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-700" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-700" style={{ fontFamily: "'Open Sans', sans-serif" }}>
       {/* Estilo Global para garantir consistência */}
       <style>{`
-        body { font-family: 'Inter', sans-serif; }
-        input, button, select, textarea { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Open Sans', sans-serif; }
+        input, button, select, textarea { font-family: 'Open Sans', sans-serif; }
       `}</style>
 
       <div className="max-w-6xl mx-auto">
