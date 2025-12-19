@@ -3,8 +3,7 @@ import {
   Users, 
   Plus, 
   FileUp, 
-  Search, 
-  CheckCircle, 
+  Search,  
   Trash2, 
   X, 
   Calendar,
@@ -12,7 +11,6 @@ import {
   Loader2,
   Stethoscope,
   Filter,
-  UserPlus
 } from 'lucide-react';
 
 // Tipagens
