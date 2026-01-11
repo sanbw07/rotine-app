@@ -13,6 +13,8 @@ import {
   Funnel,
   Baby,
   CheckCircle,
+  CheckSquare,
+  Square,
 } from '@phosphor-icons/react';
 
 // Tipagens
@@ -31,6 +33,12 @@ interface Patient {
   professionalId: string; // Vínculo com a Dra
 }
 
+interface Todo {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 const App: React.FC = () => {
   // Estados da aplicação
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -38,6 +46,8 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
   const [filterCheckin, setFilterCheckin] = useState<string>('all');
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [newTodo, setNewTodo] = useState('');
 
   // Estados de Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -70,8 +80,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const savedPatients = localStorage.getItem('pueri_patients_v6');
     const savedProfs = localStorage.getItem('pueri_profs_v6');
+    const savedTodos = localStorage.getItem('pueri_todos_v1');
 
     if (savedPatients) setPatients(JSON.parse(savedPatients));
+    if (savedTodos) setTodos(JSON.parse(savedTodos));
     if (savedProfs) {
       setProfessionals(JSON.parse(savedProfs));
     }
@@ -88,6 +100,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('pueri_profs_v6', JSON.stringify(professionals));
   }, [professionals]);
+
+  useEffect(() => {
+    localStorage.setItem('pueri_todos_v1', JSON.stringify(todos));
+  }, [todos]);
 
   const calculateAgeInfo = (birthDate: string) => {
     const today = new Date();
@@ -236,6 +252,21 @@ const App: React.FC = () => {
     setPatients(patients.filter(pat => pat.id !== id));
   };
 
+  const addTodo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTodo.trim()) return;
+    setTodos([...todos, { id: Date.now().toString(), text: newTodo, completed: false }]);
+    setNewTodo('');
+  };
+
+  const toggleTodo = (id: string) => {
+    setTodos(todos.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  };
+
+  const deleteTodo = (id: string) => {
+    setTodos(todos.filter(t => t.id !== id));
+  };
+
   const filteredPatients = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.parent.toLowerCase().includes(searchTerm.toLowerCase());
@@ -250,9 +281,8 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-8 text-stone-700">
-
-      <div className="max-w-6xl mx-auto">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+      <div className="max-w-7xl mx-auto">
+        <header className="sticky top-0 z-50 bg-stone-50/95 backdrop-blur-sm py-4 -mx-4 md:-mx-8 px-4 md:px-8 border-b border-brown-100/50 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all">
           <div>
             <h1 className="flex items-center gap-3 text-4xl font-black text-brown-900 tracking-tight mb-1">
               <Baby weight="fill" className="text-brown-500" />
@@ -283,156 +313,217 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Filtros e Busca */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-10">
-          <div className="md:col-span-2 relative">
-            <MagnifyingGlass className="absolute left-4 top-4 text-brown-300" size={20} />
-            <input
-              type="text"
-              placeholder="Buscar por nome ou responsável..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
-            />
-          </div>
-          <div className="relative">
-            <Funnel className="absolute left-4 top-4 text-brown-400" size={20} />
-            <select
-              value={filterProfessional}
-              onChange={(e) => setFilterProfessional(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm appearance-none font-bold text-brown-700 cursor-pointer"
-            >
-              <option value="all">Todas as Doutoras</option>
-              {professionals.map(prof => (
-                <option key={prof.id} value={prof.id}>{prof.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="relative">
-            <CheckCircle className="absolute left-4 top-4 text-brown-400" size={20} />
-            <select
-              value={filterCheckin}
-              onChange={(e) => setFilterCheckin(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm appearance-none font-bold text-brown-700 cursor-pointer"
-            >
-              <option value="all">Status: Todos</option>
-              <option value="done">Realizado</option>
-              <option value="pending">Pendente</option>
-            </select>
-          </div>
-          <div className="bg-brown-900 text-white rounded-2xl p-3 flex items-center justify-center gap-4 shadow-lg shadow-brown-900/20">
-            <Users size={24} className="text-brown-200" />
-            <div>
-              <p className="text-[10px] font-bold uppercase opacity-60 leading-none mb-1">Pacientes</p>
-              <p className="text-2xl font-bold text-brown-200">{filteredPatients.length}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            {/* Filtros e Busca */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-10">
+              <div className="md:col-span-2 relative">
+                <MagnifyingGlass className="absolute left-4 top-4 text-brown-300" size={20} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou responsável..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                />
+              </div>
+              <div className="relative">
+                <Funnel className="absolute left-4 top-4 text-brown-400" size={20} />
+                <select
+                  value={filterProfessional}
+                  onChange={(e) => setFilterProfessional(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm appearance-none font-bold text-brown-700 cursor-pointer"
+                >
+                  <option value="all">Todas as Doutoras</option>
+                  {professionals.map(prof => (
+                    <option key={prof.id} value={prof.id}>{prof.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative">
+                <CheckCircle className="absolute left-4 top-4 text-brown-400" size={20} />
+                <select
+                  value={filterCheckin}
+                  onChange={(e) => setFilterCheckin(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm appearance-none font-bold text-brown-700 cursor-pointer"
+                >
+                  <option value="all">Status: Todos</option>
+                  <option value="done">Realizado</option>
+                  <option value="pending">Pendente</option>
+                </select>
+              </div>
+              <div className="bg-brown-900 text-white rounded-2xl p-3 flex items-center justify-center gap-4 shadow-lg shadow-brown-900/20">
+                <Users size={24} className="text-brown-200" />
+                <div>
+                  <p className="text-[10px] font-bold uppercase opacity-60 leading-none mb-1">Pacientes</p>
+                  <p className="text-2xl font-bold text-brown-200">{filteredPatients.length}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-brown-100 bg-brown-50/50">
-                  <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Paciente</th>
-                  <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Responsável</th>
-                  <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Idade</th>
-                  <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Dra. Responsável</th>
-                  <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Último Check-in</th>
-                  <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brown-100">
-                {filteredPatients.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-brown-300">
-                      <div className="flex flex-col items-center gap-3">
-                        <Users size={48} className="opacity-20" />
-                        <p className="font-medium">Nenhum paciente encontrado</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPatients.map(p => {
-                    const age = calculateAgeInfo(p.birthDate);
-                    const prof = professionals.find(pr => pr.id === p.professionalId);
-
-                    // Verifica alerta de Introdução Alimentar (5m 25d a 6m 5d)
-                    const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
-
-                    return (
-                      <tr key={p.id} className="hover:bg-brown-50/50 transition-colors">
-                        <td className="px-6 py-5">
-                          <p className="font-bold text-brown-900">{p.name}</p>
-                          <p className="text-xs text-brown-400 font-medium">Nasc: {new Date(p.birthDate).toLocaleDateString('pt-BR')}</p>
-                        </td>
-                        <td className="px-6 py-5 text-brown-600 font-medium">
-                          {p.parent}
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                          <div className="flex flex-col items-center">
-                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-black ${age.months < 6 ? 'bg-green-100 text-green-700' :
-                              age.months < 12 ? 'bg-blue-100 text-blue-700' :
-                                'bg-orange-100 text-orange-700'
-                              }`}>
-                              {age.months < 1
-                                ? `${age.days} dias`
-                                : `${age.months} meses${age.days > 0 ? ` e ${age.days} dias` : ''}`
-                              }
-                            </span>
-                            {showFoodAlert && (
-                              <div className="flex items-center gap-1 mt-2 text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
-                                <WarningCircle size={10} />
-                                <span className="text-[10px] font-bold">Intro. Alimentar</span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          {prof ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-brown-400"></div>
-                              <span className="text-sm font-bold text-brown-700">{prof.name}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-stone-400 italic">Não definida</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                          {p.lastCheckin ? (
-                            <span className="text-sm font-bold text-brown-600 block">
-                              {new Date(p.lastCheckin).toLocaleDateString('pt-BR')}
-                              <span className="block text-xs text-stone-400 font-medium">
-                                {p.lastCheckin.includes('T') ? p.lastCheckin.split('T')[1].substring(0, 5) : ''}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-stone-300 font-medium">-</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => { setCheckinTargetId(p.id); setIsCheckinModalOpen(true); }}
-                              className="bg-brown-100 text-brown-700 px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-brown-600 hover:text-white transition-all"
-                            >
-                              Check-in
-                            </button>
-                            <button
-                              onClick={() => deletePatient(p.id)}
-                              className="text-stone-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
-                              title="Excluir"
-                            >
-                              <Trash size={18} />
-                            </button>
+            <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-brown-100 bg-brown-50/50">
+                      <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Paciente</th>
+                      <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Responsável</th>
+                      <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Idade</th>
+                      <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Dra. Responsável</th>
+                      <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Último Check-in</th>
+                      <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brown-100">
+                    {filteredPatients.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-brown-300">
+                          <div className="flex flex-col items-center gap-3">
+                            <Users size={48} className="opacity-20" />
+                            <p className="font-medium">Nenhum paciente encontrado</p>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
+                    ) : (
+                      filteredPatients.map(p => {
+                        const age = calculateAgeInfo(p.birthDate);
+                        const prof = professionals.find(pr => pr.id === p.professionalId);
+
+                        // Verifica alerta de Introdução Alimentar (5m 25d a 6m 5d)
+                        const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
+
+                        return (
+                          <tr key={p.id} className="hover:bg-brown-50/50 transition-colors">
+                            <td className="px-6 py-5">
+                              <p className="font-bold text-brown-900">{p.name}</p>
+                              <p className="text-xs text-brown-400 font-medium">Nasc: {new Date(p.birthDate).toLocaleDateString('pt-BR')}</p>
+                            </td>
+                            <td className="px-6 py-5 text-brown-600 font-medium">
+                              {p.parent}
+                            </td>
+                            <td className="px-6 py-5 text-center">
+                              <div className="flex flex-col items-center">
+                                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-black ${age.months < 6 ? 'bg-green-100 text-green-700' :
+                                  age.months < 12 ? 'bg-blue-100 text-blue-700' :
+                                    'bg-purple-100 text-purple-700'
+                                  }`}>
+                                  {age.months < 1
+                                    ? `${age.days} dias`
+                                    : age.months < 12
+                                      ? `${age.months} meses${age.days > 0 ? ` e ${age.days} dias` : ''}`
+                                      : `${Math.floor(age.months / 12)} ano${Math.floor(age.months / 12) > 1 ? 's' : ''}${age.months % 12 > 0 ? ` e ${age.months % 12} meses` : ''}`
+                                  }
+                                </span>
+                                {showFoodAlert && (
+                                  <div className="flex items-center gap-1 mt-2 text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
+                                    <WarningCircle size={10} />
+                                    <span className="text-[10px] font-bold">Intro. Alimentar</span>
+                                  </div>
+                                )}
+                                {age.months >= 12 && (
+                                  <div className="flex items-center gap-1 mt-2 text-purple-600 bg-purple-50 px-2 py-1 rounded-lg border border-purple-100">
+                                    <CalendarBlank size={10} />
+                                    <span className="text-[10px] font-bold">Consultas Trimestrais</span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-5">
+                              {prof ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full bg-brown-400"></div>
+                                  <span className="text-sm font-bold text-brown-700">{prof.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-stone-400 italic">Não definida</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-5 text-center">
+                              {p.lastCheckin ? (
+                                <span className="text-sm font-bold text-brown-600 block">
+                                  {new Date(p.lastCheckin).toLocaleDateString('pt-BR')}
+                                  <span className="block text-xs text-stone-400 font-medium">
+                                    {p.lastCheckin.includes('T') ? p.lastCheckin.split('T')[1].substring(0, 5) : ''}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-stone-300 font-medium">-</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-5">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => { setCheckinTargetId(p.id); setIsCheckinModalOpen(true); }}
+                                  className="bg-brown-100 text-brown-700 px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-brown-600 hover:text-white transition-all"
+                                >
+                                  Check-in
+                                </button>
+                                <button
+                                  onClick={() => deletePatient(p.id)}
+                                  className="text-stone-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
+                                  title="Excluir"
+                                >
+                                  <Trash size={18} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar - Todo List */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 p-6 sticky top-32">
+              <h2 className="text-xl font-black text-brown-900 mb-4 flex items-center gap-2">
+                <CheckSquare className="text-brown-500" weight="fill" />
+                Anotações
+              </h2>
+
+              <form onSubmit={addTodo} className="flex gap-2 mb-6">
+                <input
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  placeholder="Nova tarefa..."
+                  className="flex-1 px-4 py-2 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none text-sm font-medium text-brown-900"
+                />
+                <button type="submit" className="bg-brown-600 text-white p-2 rounded-xl hover:bg-brown-700 transition-colors shadow-md shadow-brown-200">
+                  <Plus size={18} />
+                </button>
+              </form>
+
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                {todos.length === 0 ? (
+                  <p className="text-center text-stone-300 text-sm italic py-4">Nenhuma anotação.</p>
+                ) : (
+                  todos.map(todo => (
+                    <div key={todo.id} className="group flex items-start gap-3 p-3 rounded-xl hover:bg-brown-50 transition-colors border border-transparent hover:border-brown-100">
+                      <button
+                        onClick={() => toggleTodo(todo.id)}
+                        className={`mt-0.5 min-w-[1.125rem] ${todo.completed ? 'text-brown-400' : 'text-stone-300 hover:text-brown-400'} transition-colors`}
+                      >
+                        {todo.completed ? <CheckSquare size={18} weight="fill" /> : <Square size={18} />}
+                      </button>
+                      <span className={`text-sm font-medium flex-1 break-words ${todo.completed ? 'text-stone-400 line-through decoration-brown-200' : 'text-brown-700'}`}>
+                        {todo.text}
+                      </span>
+                      <button
+                        onClick={() => deleteTodo(todo.id)}
+                        className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-400 transition-all p-1"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
+                  ))
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
