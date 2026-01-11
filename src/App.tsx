@@ -59,6 +59,8 @@ const App: React.FC = () => {
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   const [selectedPatientPhone, setSelectedPatientPhone] = useState<{ name: string, phone: string } | null>(null);
+  const [selectedPatients, setSelectedPatients] = useState<number[]>([]);
+  const [isMultiDeleteModalOpen, setIsMultiDeleteModalOpen] = useState(false);
 
   const [checkinTargetId, setCheckinTargetId] = useState<number | null>(null);
   const [checkinDate, setCheckinDate] = useState(new Date().toISOString().split('T')[0]);
@@ -269,6 +271,31 @@ const App: React.FC = () => {
     }
   };
 
+  const togglePatientSelection = (id: number) => {
+    setSelectedPatients(prev =>
+      prev.includes(id) ? prev.filter(patientId => patientId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPatients.length === filteredPatients.length) {
+      setSelectedPatients([]);
+    } else {
+      setSelectedPatients(filteredPatients.map(p => p.id));
+    }
+  };
+
+  const handleMultiDelete = () => {
+    if (selectedPatients.length === 0) return;
+    setIsMultiDeleteModalOpen(true);
+  };
+
+  const confirmMultiDelete = () => {
+    setPatients(patients.filter(patient => !selectedPatients.includes(patient.id)));
+    setSelectedPatients([]);
+    setIsMultiDeleteModalOpen(false);
+  };
+
   const addTodo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTodo.trim()) return;
@@ -327,6 +354,15 @@ const App: React.FC = () => {
               <Plus size={20} />
               Novo Paciente
             </button>
+            {selectedPatients.length > 0 && (
+              <button
+                onClick={handleMultiDelete}
+                className="bg-red-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg shadow-red-200/50"
+              >
+                <Trash size={18} />
+                Excluir ({selectedPatients.length})
+              </button>
+            )}
           </div>
         </header>
 
@@ -375,6 +411,11 @@ const App: React.FC = () => {
                 <div>
                   <p className="text-[10px] font-bold uppercase opacity-60 leading-none mb-1">Pacientes</p>
                   <p className="text-2xl font-bold text-brown-200">{filteredPatients.length}</p>
+                  {selectedPatients.length > 0 && (
+                    <p className="text-[10px] text-brown-200 mt-1">
+                      {selectedPatients.length} selecionado{selectedPatients.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -384,6 +425,21 @@ const App: React.FC = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-brown-100 bg-brown-50/50">
+                      <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={toggleSelectAll}
+                            className={`p-1 rounded border ${selectedPatients.length > 0 && selectedPatients.length === filteredPatients.length ? 'bg-brown-600 border-brown-600 text-white' : 'border-brown-200 text-brown-300 hover:border-brown-300'}`}
+                          >
+                            {selectedPatients.length > 0 && selectedPatients.length === filteredPatients.length ? (
+                              <CheckSquare size={14} weight="fill" />
+                            ) : (
+                              <Square size={14} />
+                            )}
+                          </button>
+                          Seleção
+                        </div>
+                      </th>
                       <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Paciente</th>
                       <th className="px-6 py-5 text-left text-xs font-black text-brown-400 uppercase tracking-wider">Responsável</th>
                       <th className="px-6 py-5 text-center text-xs font-black text-brown-400 uppercase tracking-wider">Idade</th>
@@ -395,7 +451,7 @@ const App: React.FC = () => {
                   <tbody className="divide-y divide-brown-100">
                     {filteredPatients.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-brown-300">
+                        <td colSpan={7} className="px-6 py-12 text-center text-brown-300">
                           <div className="flex flex-col items-center gap-3">
                             <Users size={48} className="opacity-20" />
                             <p className="font-medium">Nenhum paciente encontrado</p>
@@ -406,12 +462,24 @@ const App: React.FC = () => {
                       filteredPatients.map(p => {
                         const age = calculateAgeInfo(p.birthDate);
                         const prof = professionals.find(pr => pr.id === p.professionalId);
+                        const isSelected = selectedPatients.includes(p.id);
 
                         // Verifica alerta de Introdução Alimentar (5m 25d a 6m 5d)
                         const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
 
                         return (
-                          <tr key={p.id} className="hover:bg-brown-50/50 transition-colors">
+                          <tr 
+                            key={p.id} 
+                            className={`hover:bg-brown-50/50 transition-colors ${isSelected ? 'bg-brown-50' : ''}`}
+                          >
+                            <td className="px-6 py-5">
+                              <button
+                                onClick={() => togglePatientSelection(p.id)}
+                                className={`p-1.5 rounded border transition-all ${isSelected ? 'bg-brown-600 border-brown-600 text-white' : 'border-brown-200 text-brown-300 hover:border-brown-300'}`}
+                              >
+                                {isSelected ? <CheckSquare size={14} weight="fill" /> : <Square size={14} />}
+                              </button>
+                            </td>
                             <td className="px-6 py-5">
                               <div className="flex items-center gap-2">
                                 <div>
@@ -689,6 +757,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Modal Confirmação de Exclusão */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center">
@@ -716,6 +785,7 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Modal Visualizar Telefone */}
       {isPhoneModalOpen && selectedPatientPhone && (
         <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center relative">
@@ -743,6 +813,38 @@ const App: React.FC = () => {
             >
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmação de Exclusão Múltipla */}
+      {isMultiDeleteModalOpen && (
+        <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <WarningCircle size={32} className="text-red-500" />
+            </div>
+            <h3 className="text-xl font-black text-brown-900 mb-2">
+              Excluir {selectedPatients.length} {selectedPatients.length === 1 ? 'paciente' : 'pacientes'}?
+            </h3>
+            <p className="text-stone-500 font-medium mb-8">
+              Esta ação não poderá ser desfeita. {selectedPatients.length > 1 && 'Todos os pacientes selecionados serão excluídos.'}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsMultiDeleteModalOpen(false)}
+                className="flex-1 py-3 font-bold text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmMultiDelete}
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black shadow-lg shadow-red-200 hover:bg-red-600 transition-all"
+              >
+                Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}
