@@ -17,6 +17,8 @@ import {
   Square,
   Phone,
   Pencil,
+  Copy,
+  Check,
 } from '@phosphor-icons/react';
 
 // Tipagens
@@ -65,6 +67,13 @@ const App: React.FC = () => {
   const [selectedPatients, setSelectedPatients] = useState<number[]>([]);
   const [isMultiDeleteModalOpen, setIsMultiDeleteModalOpen] = useState(false);
 
+  // Estados para geração de mensagem
+  const [selectedPatientForMessage, setSelectedPatientForMessage] = useState<Patient | null>(null);
+  const [selectedDateForMessage, setSelectedDateForMessage] = useState('');
+  const [selectedTimeForMessage, setSelectedTimeForMessage] = useState('');
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [isMessageCopied, setIsMessageCopied] = useState(false);
+
   const [checkinTargetId, setCheckinTargetId] = useState<number | null>(null);
   const [checkinDate, setCheckinDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkinTime, setCheckinTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
@@ -73,6 +82,8 @@ const App: React.FC = () => {
   // Injeção de dependências e fontes   
   useEffect(() => {
     setCheckinTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    setSelectedDateForMessage(new Date().toISOString().split('T')[0]);
+    setSelectedTimeForMessage(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
 
     const script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
@@ -112,6 +123,30 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('pueri_todos_v1', JSON.stringify(todos));
   }, [todos]);
+
+  // Efeito para atualizar data/hora quando selecionar paciente
+  useEffect(() => {
+    if (selectedPatientForMessage && selectedPatientForMessage.lastCheckin) {
+      // Extrai data e hora do último check-in
+      const lastCheckin = selectedPatientForMessage.lastCheckin;
+      if (lastCheckin.includes('T')) {
+        const [datePart, timePart] = lastCheckin.split('T');
+        setSelectedDateForMessage(datePart);
+
+        // Extrai apenas hora:minuto
+        const time = timePart.substring(0, 5);
+        setSelectedTimeForMessage(time);
+      } else {
+        // Se não tiver hora, usa apenas a data
+        setSelectedDateForMessage(lastCheckin.split('T')[0]);
+        setSelectedTimeForMessage('09:00'); // Hora padrão
+      }
+    } else if (selectedPatientForMessage && selectedPatientForMessage.nextCheckin) {
+      // Se não tiver check-in mas tiver próxima consulta agendada
+      setSelectedDateForMessage(selectedPatientForMessage.nextCheckin);
+      setSelectedTimeForMessage('09:00'); // Hora padrão
+    }
+  }, [selectedPatientForMessage]);
 
   const calculateAgeInfo = (birthDate: string) => {
     const today = new Date();
@@ -160,6 +195,56 @@ const App: React.FC = () => {
     setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
     setIsEditModalOpen(false);
     setEditingPatient(null);
+  };
+
+  // Função para gerar mensagem de confirmação
+  const generateConfirmationMessage = () => {
+    if (!selectedPatientForMessage) {
+      alert("Por favor, selecione um paciente primeiro.");
+      return;
+    }
+
+    const professional = professionals.find(p => p.id === selectedPatientForMessage.professionalId);
+    const doctorName = professional ? professional.name : 'Dra. Responsável';
+
+    // Verifica se o paciente tem check-in agendado
+    if (!selectedPatientForMessage.lastCheckin && !selectedPatientForMessage.nextCheckin) {
+      alert("Este paciente ainda não tem consulta agendada. Faça um check-in primeiro.");
+      return;
+    }
+
+    // Formatar data
+    const dateObj = new Date(selectedDateForMessage);
+    const formattedDate = dateObj.toLocaleDateString('pt-BR');
+
+    // Formatar hora
+    const formattedTime = selectedTimeForMessage;
+
+    const message = `Olá ${selectedPatientForMessage.parent}! Tudo bem? 😊
+
+Posso confirmar a consulta do(a) ${selectedPatientForMessage.name} no dia ${formattedDate} às ${formattedTime} com a ${doctorName}?
+
+Ficamos à disposição para qualquer dúvida!
+    
+Atenciosamente,
+Equipe Espaço da Ped`;
+
+    setGeneratedMessage(message);
+  };
+
+  // Função para copiar mensagem
+  const copyToClipboard = () => {
+    if (!generatedMessage) return;
+
+    navigator.clipboard.writeText(generatedMessage)
+      .then(() => {
+        setIsMessageCopied(true);
+        setTimeout(() => setIsMessageCopied(false), 2000);
+      })
+      .catch(err => {
+        console.error('Erro ao copiar: ', err);
+        alert('Erro ao copiar mensagem.');
+      });
   };
 
   const handleAddPatient = (e: React.FormEvent<HTMLFormElement>) => {
@@ -217,7 +302,7 @@ const App: React.FC = () => {
         const profId = matchedProf ? matchedProf.id : professionals[0].id;
 
         return {
-          id: Date.now() + index + Math.random(),
+          id: Date.now() + index,
           name: String(row['Nome'] || row['Paciente'] || ""),
           parent: String(row['Responsável'] || row['Pai/Mãe'] || "N/A"),
           birthDate: String(bDate),
@@ -488,8 +573,8 @@ const App: React.FC = () => {
                         const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
 
                         return (
-                          <tr 
-                            key={p.id} 
+                          <tr
+                            key={p.id}
                             className={`hover:bg-brown-50/50 transition-colors ${isSelected ? 'bg-brown-50' : ''}`}
                           >
                             <td className="px-6 py-5">
@@ -603,9 +688,10 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Sidebar - Todo List */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 p-6 sticky top-32">
+          {/* Sidebar - Todo List e Gerador de Mensagem */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Todo List */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 p-6">
               <h2 className="text-xl font-black text-brown-900 mb-4 flex items-center gap-2">
                 <CheckSquare className="text-brown-500" weight="fill" />
                 Anotações
@@ -623,7 +709,7 @@ const App: React.FC = () => {
                 </button>
               </form>
 
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                 {todos.length === 0 ? (
                   <p className="text-center text-stone-300 text-sm italic py-4">Nenhuma anotação.</p>
                 ) : (
@@ -646,6 +732,149 @@ const App: React.FC = () => {
                       </button>
                     </div>
                   ))
+                )}
+              </div>
+            </div>
+
+            {/* Gerador de Mensagem de Confirmação */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-brown-100/50 p-6">
+              <h2 className="text-xl font-black text-brown-900 mb-4 flex items-center gap-2">
+                <CheckCircle className="text-green-500" weight="fill" />
+                Gerar Mensagem
+              </h2>
+
+              <div className="space-y-4">
+                {/* Seleção do Paciente */}
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Selecionar Paciente</label>
+                  <select
+                    value={selectedPatientForMessage?.id || ''}
+                    onChange={(e) => {
+                      const patientId = parseInt(e.target.value);
+                      const patient = patients.find(p => p.id === patientId);
+                      setSelectedPatientForMessage(patient || null);
+                    }}
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all text-sm font-medium text-brown-900"
+                  >
+                    <option value="">Selecione um paciente...</option>
+                    {patients.map(patient => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} - {patient.parent}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Data da Consulta */}
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Data da Consulta</label>
+                  <input
+                    type="date"
+                    value={selectedDateForMessage}
+                    onChange={(e) => setSelectedDateForMessage(e.target.value)}
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all text-sm font-medium text-brown-900"
+                  />
+                </div>
+
+                {/* Hora da Consulta */}
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Hora da Consulta</label>
+                  <input
+                    type="time"
+                    value={selectedTimeForMessage}
+                    onChange={(e) => setSelectedTimeForMessage(e.target.value)}
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all text-sm font-medium text-brown-900"
+                  />
+                </div>
+
+                {/* Botão para Gerar Mensagem */}
+                <button
+                  onClick={generateConfirmationMessage}
+                  disabled={!selectedPatientForMessage}
+                  className={`w-full font-black py-3 rounded-xl transition-all ${!selectedPatientForMessage
+                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                    : 'bg-green-600 text-white shadow-lg shadow-green-200/50 hover:bg-green-700 hover:shadow-green-200'
+                    }`}
+                >
+                  Gerar Mensagem
+                </button>
+
+                {/* Área da Mensagem Gerada */}
+                {generatedMessage && (
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-xs font-bold text-brown-500 uppercase">Mensagem Gerada</label>
+                      <button
+                        onClick={copyToClipboard}
+                        className="flex items-center gap-1 text-sm font-medium text-brown-600 hover:text-brown-800 transition-colors"
+                      >
+                        {isMessageCopied ? (
+                          <>
+                            <Check size={16} className="text-green-500" />
+                            <span className="text-green-500">Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={16} />
+                            <span>Copiar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
+                      <pre className="text-sm text-brown-800 whitespace-pre-wrap font-medium">
+                        {generatedMessage}
+                      </pre>
+                    </div>
+
+                    {/* Botão para WhatsApp */}
+                    {selectedPatientForMessage?.phone && (
+                      <a
+                        href={`https://wa.me/${selectedPatientForMessage.phone.replace(/\D/g, '')}?text=${encodeURIComponent(generatedMessage)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 w-full bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow-md shadow-green-200"
+                      >
+                        <CheckCircle size={20} />
+                        Enviar via WhatsApp
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Informações do Paciente Selecionado */}
+                {selectedPatientForMessage && (
+                  <div className="mt-3 p-3 rounded-xl border ${selectedPatientForMessage.lastCheckin ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}">
+                    <p className="text-xs font-bold ${selectedPatientForMessage.lastCheckin ? 'text-green-800' : 'text-yellow-800'} mb-1">
+                      {selectedPatientForMessage.lastCheckin ? '✓ Consulta agendada' : '⚠️ Sem consulta agendada'}
+                    </p>
+                    <p className="text-sm font-medium ${selectedPatientForMessage.lastCheckin ? 'text-green-900' : 'text-yellow-900'}">
+                      {selectedPatientForMessage.name} - {selectedPatientForMessage.parent}
+                    </p>
+
+                    {selectedPatientForMessage.lastCheckin && (
+                      <p className="text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1">
+                        📅 Última consulta: {new Date(selectedPatientForMessage.lastCheckin).toLocaleDateString('pt-BR')}
+                        {selectedPatientForMessage.lastCheckin.includes('T') && (
+                          <span className="ml-2">
+                            🕒 {selectedPatientForMessage.lastCheckin.split('T')[1].substring(0, 5)}
+                          </span>
+                        )}
+                      </p>
+                    )}
+
+                    {selectedPatientForMessage.phone && (
+                      <p className="text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1">
+                        📞 {selectedPatientForMessage.phone}
+                      </p>
+                    )}
+
+                    {!selectedPatientForMessage.lastCheckin && (
+                      <p className="text-xs text-yellow-600 mt-2 font-medium">
+                        ⚠️ Faça um check-in primeiro para agendar a consulta
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -739,45 +968,45 @@ const App: React.FC = () => {
             <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
               <div>
                 <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nome da Criança</label>
-                <input 
-                  required 
-                  name="editName" 
+                <input
+                  required
+                  name="editName"
                   defaultValue={editingPatient.name}
-                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
-                  placeholder="Ex: Maria Alice" 
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
+                  placeholder="Ex: Maria Alice"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nascimento</label>
-                  <input 
-                    required 
-                    type="date" 
-                    name="editBirthDate" 
+                  <input
+                    required
+                    type="date"
+                    name="editBirthDate"
                     defaultValue={editingPatient.birthDate}
-                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Responsável</label>
-                  <input 
-                    required 
-                    name="editParent" 
+                  <input
+                    required
+                    name="editParent"
                     defaultValue={editingPatient.parent}
-                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
-                    placeholder="Ex: Mãe" 
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
+                    placeholder="Ex: Mãe"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Telefone / WhatsApp</label>
-                <input 
-                  name="editPhone" 
+                <input
+                  name="editPhone"
                   defaultValue={editingPatient.phone || ''}
-                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
-                  placeholder="Ex: (11) 99999-9999" 
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
+                  placeholder="Ex: (11) 99999-9999"
                 />
               </div>
 
@@ -792,12 +1021,12 @@ const App: React.FC = () => {
                   ) : (
                     professionals.map(prof => (
                       <label key={prof.id} className="cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name="editProfessionalId" 
-                          value={prof.id} 
+                        <input
+                          type="radio"
+                          name="editProfessionalId"
+                          value={prof.id}
                           defaultChecked={editingPatient.professionalId === prof.id}
-                          className="peer hidden" 
+                          className="peer hidden"
                         />
                         <div className="p-3 rounded-xl bg-stone-50 border-2 border-transparent peer-checked:border-brown-500 peer-checked:bg-brown-50 text-stone-500 peer-checked:text-brown-700 font-bold text-sm transition-all text-center">
                           {prof.name}
