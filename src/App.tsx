@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Square,
   Phone,
+  Pencil,
 } from '@phosphor-icons/react';
 
 // Tipagens
@@ -53,6 +54,8 @@ const App: React.FC = () => {
 
   // Estados de Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
   const [isProfModalOpen, setIsProfModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -68,7 +71,6 @@ const App: React.FC = () => {
   const [isLibLoading, setIsLibLoading] = useState(true);
 
   // Injeção de dependências e fontes   
-  // Injeção de dependências
   useEffect(() => {
     setCheckinTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
 
@@ -84,7 +86,6 @@ const App: React.FC = () => {
   }, []);
 
   // Carregar dados
-  // Efeito para carregar dados salvos
   useEffect(() => {
     const savedPatients = localStorage.getItem('pueri_patients_v6');
     const savedProfs = localStorage.getItem('pueri_profs_v6');
@@ -96,7 +97,6 @@ const App: React.FC = () => {
       setProfessionals(JSON.parse(savedProfs));
     }
 
-    // Simulação do carregamento da lib XLSX
     setTimeout(() => setIsLibLoading(false), 1000);
   }, []);
 
@@ -117,7 +117,6 @@ const App: React.FC = () => {
     const today = new Date();
     const birth = new Date(birthDate);
 
-    // Ajuste para fuso horário (simplificado)
     birth.setMinutes(birth.getMinutes() + birth.getTimezoneOffset());
 
     let ageMonths = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
@@ -125,11 +124,9 @@ const App: React.FC = () => {
       ageMonths--;
     }
 
-    // Calcula dias restantes
     const lastMonthDate = new Date(birth);
     lastMonthDate.setMonth(lastMonthDate.getMonth() + ageMonths);
 
-    // Normaliza para ignorar horas na diferença de dias
     const todayNoTime = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const lastMonthNoTime = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth(), lastMonthDate.getDate());
 
@@ -137,6 +134,32 @@ const App: React.FC = () => {
     const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     return { months: ageMonths, days };
+  };
+
+  // Função para abrir modal de edição
+  const handleEditPatient = (patient: Patient) => {
+    setEditingPatient(patient);
+    setIsEditModalOpen(true);
+  };
+
+  // Função para salvar edição
+  const handleSaveEdit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingPatient) return;
+
+    const formData = new FormData(e.currentTarget);
+    const updatedPatient: Patient = {
+      ...editingPatient,
+      name: formData.get('editName') as string,
+      parent: formData.get('editParent') as string,
+      birthDate: formData.get('editBirthDate') as string,
+      phone: formData.get('editPhone') as string || '',
+      professionalId: formData.get('editProfessionalId') as string,
+    };
+
+    setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+    setIsEditModalOpen(false);
+    setEditingPatient(null);
   };
 
   const handleAddPatient = (e: React.FormEvent<HTMLFormElement>) => {
@@ -189,7 +212,6 @@ const App: React.FC = () => {
           bDate = bDate.toISOString().split('T')[0];
         }
 
-        // Tenta encontrar uma Dra pelo nome na planilha, senão usa a primeira cadastrada
         const profNameInExcel = row['Dra'] || row['Médica'] || row['Profissional'];
         const matchedProf = professionals.find(p => p.name.toLowerCase().includes(String(profNameInExcel).toLowerCase()));
         const profId = matchedProf ? matchedProf.id : professionals[0].id;
@@ -241,12 +263,11 @@ const App: React.FC = () => {
         const ageInfo = calculateAgeInfo(p.birthDate);
         let nextDate = new Date(visitDate);
 
-        // Simplified frequency logic for next check-in based on age
-        if (ageInfo.months < 12) { // Monthly for first year
+        if (ageInfo.months < 12) {
           nextDate.setMonth(visitDate.getMonth() + 1);
-        } else if (ageInfo.months < 24) { // Quarterly for second year
+        } else if (ageInfo.months < 24) {
           nextDate.setMonth(visitDate.getMonth() + 3);
-        } else { // Annually after two years
+        } else {
           nextDate.setFullYear(visitDate.getFullYear() + 1);
         }
 
@@ -464,7 +485,6 @@ const App: React.FC = () => {
                         const prof = professionals.find(pr => pr.id === p.professionalId);
                         const isSelected = selectedPatients.includes(p.id);
 
-                        // Verifica alerta de Introdução Alimentar (5m 25d a 6m 5d)
                         const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
 
                         return (
@@ -551,6 +571,13 @@ const App: React.FC = () => {
                             </td>
                             <td className="px-6 py-5">
                               <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleEditPatient(p)}
+                                  className="bg-blue-100 text-blue-600 hover:bg-blue-200 p-2 rounded-lg transition-all"
+                                  title="Editar"
+                                >
+                                  <Pencil size={16} />
+                                </button>
                                 <button
                                   onClick={() => { setCheckinTargetId(p.id); setIsCheckinModalOpen(true); }}
                                   className="bg-brown-100 text-brown-700 px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-brown-600 hover:text-white transition-all"
@@ -690,6 +717,105 @@ const App: React.FC = () => {
                   }`}
               >
                 Salvar Paciente
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Paciente */}
+      {isEditModalOpen && editingPatient && (
+        <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-md rounded-[2rem] p-8 shadow-2xl relative">
+            <button
+              onClick={() => { setIsEditModalOpen(false); setEditingPatient(null); }}
+              className="absolute right-6 top-6 text-stone-300 hover:text-stone-500 transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            <h2 className="text-2xl font-black text-brown-900 mb-6">Editar Paciente</h2>
+
+            <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nome da Criança</label>
+                <input 
+                  required 
+                  name="editName" 
+                  defaultValue={editingPatient.name}
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                  placeholder="Ex: Maria Alice" 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nascimento</label>
+                  <input 
+                    required 
+                    type="date" 
+                    name="editBirthDate" 
+                    defaultValue={editingPatient.birthDate}
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Responsável</label>
+                  <input 
+                    required 
+                    name="editParent" 
+                    defaultValue={editingPatient.parent}
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                    placeholder="Ex: Mãe" 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Telefone / WhatsApp</label>
+                <input 
+                  name="editPhone" 
+                  defaultValue={editingPatient.phone || ''}
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                  placeholder="Ex: (11) 99999-9999" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Doutora Responsável</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {professionals.length === 0 ? (
+                    <div className="col-span-2 p-4 bg-orange-50 border border-orange-100 rounded-xl text-orange-600 text-sm font-medium flex items-center gap-2">
+                      <WarningCircle size={16} />
+                      Cadastre uma doutora primeiro
+                    </div>
+                  ) : (
+                    professionals.map(prof => (
+                      <label key={prof.id} className="cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="editProfessionalId" 
+                          value={prof.id} 
+                          defaultChecked={editingPatient.professionalId === prof.id}
+                          className="peer hidden" 
+                        />
+                        <div className="p-3 rounded-xl bg-stone-50 border-2 border-transparent peer-checked:border-brown-500 peer-checked:bg-brown-50 text-stone-500 peer-checked:text-brown-700 font-bold text-sm transition-all text-center">
+                          {prof.name}
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={professionals.length === 0}
+                className={`w-full font-black py-4 rounded-xl mt-2 transition-all ${professionals.length === 0
+                  ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                  : 'bg-brown-600 text-white shadow-lg shadow-brown-200/50 hover:bg-brown-700 hover:shadow-brown-200'
+                  }`}
+              >
+                Salvar Alterações
               </button>
             </form>
           </div>
