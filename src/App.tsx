@@ -19,6 +19,9 @@ import {
   Pencil,
   Copy,
   Check,
+  Lock,
+  User,
+  ArrowLeft,
 } from '@phosphor-icons/react';
 
 // Tipagens
@@ -44,7 +47,35 @@ interface Todo {
   completed: boolean;
 }
 
+interface UserAccount {
+  id: string;
+  username: string;
+  password: string; // Em produção, use hash!
+  name: string;
+  email?: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
 const App: React.FC = () => {
+  // Estado de autenticação
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [showLoginForm, setShowLoginForm] = useState(true);
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+
+  // Estados para registro
+  const [registerUsername, setRegisterUsername] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerError, setRegisterError] = useState('');
+  const [registerSuccess, setRegisterSuccess] = useState('');
+
   // Estados da aplicação
   const [patients, setPatients] = useState<Patient[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -79,8 +110,153 @@ const App: React.FC = () => {
   const [checkinTime, setCheckinTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
   const [isLibLoading, setIsLibLoading] = useState(true);
 
+  // Inicializar usuário admin padrão
+  useEffect(() => {
+    const savedUsers = localStorage.getItem('pueri_users');
+    if (!savedUsers) {
+      const defaultUsers: UserAccount[] = [
+        {
+          id: '1',
+          username: 'admin',
+          password: 'pueri123', // Em produção, use bcrypt ou similar!
+          name: 'Administrador',
+          role: 'admin',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      localStorage.setItem('pueri_users', JSON.stringify(defaultUsers));
+    }
+  }, []);
+
+  // Verificar autenticação ao carregar
+  useEffect(() => {
+    const savedAuth = localStorage.getItem('pueri_auth');
+    const savedUsers = localStorage.getItem('pueri_users');
+    
+    if (savedAuth && savedUsers) {
+      const authData = JSON.parse(savedAuth);
+      const users = JSON.parse(savedUsers);
+      const user = users.find((u: UserAccount) => u.id === authData.userId);
+      
+      if (user) {
+        setIsAuthenticated(true);
+        setCurrentUser(user);
+        setShowLoginForm(false);
+      }
+    }
+  }, []);
+
+  // Função de login
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+
+    const savedUsers = localStorage.getItem('pueri_users');
+    if (!savedUsers) {
+      setLoginError('Erro ao carregar usuários');
+      return;
+    }
+
+    const users: UserAccount[] = JSON.parse(savedUsers);
+    const user = users.find(u => u.username === username && u.password === password);
+
+    if (user) {
+      setIsAuthenticated(true);
+      setCurrentUser(user);
+      setShowLoginForm(false);
+      localStorage.setItem('pueri_auth', JSON.stringify({ userId: user.id }));
+    } else {
+      setLoginError('Usuário ou senha incorretos');
+    }
+  };
+
+  // Função de registro
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegisterError('');
+    setRegisterSuccess('');
+
+    // Validações
+    if (!registerUsername.trim()) {
+      setRegisterError('Nome de usuário é obrigatório');
+      return;
+    }
+
+    if (!registerPassword.trim()) {
+      setRegisterError('Senha é obrigatória');
+      return;
+    }
+
+    if (registerPassword.length < 6) {
+      setRegisterError('Senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    if (registerPassword !== registerConfirmPassword) {
+      setRegisterError('As senhas não coincidem');
+      return;
+    }
+
+    if (!registerName.trim()) {
+      setRegisterError('Nome completo é obrigatório');
+      return;
+    }
+
+    // Carregar usuários existentes
+    const savedUsers = localStorage.getItem('pueri_users');
+    const users: UserAccount[] = savedUsers ? JSON.parse(savedUsers) : [];
+
+    // Verificar se usuário já existe
+    const userExists = users.some(u => u.username === registerUsername);
+    if (userExists) {
+      setRegisterError('Este nome de usuário já está em uso');
+      return;
+    }
+
+    // Criar novo usuário
+    const newUser: UserAccount = {
+      id: Date.now().toString(),
+      username: registerUsername,
+      password: registerPassword, // Em produção, faça hash aqui!
+      name: registerName,
+      email: registerEmail || undefined,
+      role: 'user', // Todos novos usuários são 'user' por padrão
+      createdAt: new Date().toISOString()
+    };
+
+    // Salvar usuário
+    users.push(newUser);
+    localStorage.setItem('pueri_users', JSON.stringify(users));
+
+    // Limpar formulário e mostrar sucesso
+    setRegisterSuccess('Cadastro realizado com sucesso! Você já pode fazer login.');
+    setRegisterUsername('');
+    setRegisterPassword('');
+    setRegisterConfirmPassword('');
+    setRegisterName('');
+    setRegisterEmail('');
+
+    // Voltar para login após 3 segundos
+    setTimeout(() => {
+      setShowRegisterForm(false);
+      setShowLoginForm(true);
+    }, 3000);
+  };
+
+  // Função de logout
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setShowLoginForm(true);
+    setUsername('');
+    setPassword('');
+    localStorage.removeItem('pueri_auth');
+  };
+
   // Injeção de dependências e fontes   
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     setCheckinTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     setSelectedDateForMessage(new Date().toISOString().split('T')[0]);
     setSelectedTimeForMessage(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
@@ -92,12 +268,16 @@ const App: React.FC = () => {
     document.head.appendChild(script);
 
     return () => {
-      document.head.removeChild(script);
+      if (script.parentNode) {
+        document.head.removeChild(script);
+      }
     };
-  }, []);
+  }, [isAuthenticated]);
 
   // Carregar dados
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const savedPatients = localStorage.getItem('pueri_patients_v6');
     const savedProfs = localStorage.getItem('pueri_profs_v6');
     const savedTodos = localStorage.getItem('pueri_todos_v1');
@@ -109,42 +289,40 @@ const App: React.FC = () => {
     }
 
     setTimeout(() => setIsLibLoading(false), 1000);
-  }, []);
+  }, [isAuthenticated]);
 
   // Efeito para salvar dados quando mudam
   useEffect(() => {
+    if (!isAuthenticated) return;
     localStorage.setItem('pueri_patients_v6', JSON.stringify(patients));
-  }, [patients]);
+  }, [patients, isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     localStorage.setItem('pueri_profs_v6', JSON.stringify(professionals));
-  }, [professionals]);
+  }, [professionals, isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     localStorage.setItem('pueri_todos_v1', JSON.stringify(todos));
-  }, [todos]);
+  }, [todos, isAuthenticated]);
 
   // Efeito para atualizar data/hora quando selecionar paciente
   useEffect(() => {
     if (selectedPatientForMessage && selectedPatientForMessage.lastCheckin) {
-      // Extrai data e hora do último check-in
       const lastCheckin = selectedPatientForMessage.lastCheckin;
       if (lastCheckin.includes('T')) {
         const [datePart, timePart] = lastCheckin.split('T');
         setSelectedDateForMessage(datePart);
-
-        // Extrai apenas hora:minuto
         const time = timePart.substring(0, 5);
         setSelectedTimeForMessage(time);
       } else {
-        // Se não tiver hora, usa apenas a data
         setSelectedDateForMessage(lastCheckin.split('T')[0]);
-        setSelectedTimeForMessage('09:00'); // Hora padrão
+        setSelectedTimeForMessage('09:00');
       }
     } else if (selectedPatientForMessage && selectedPatientForMessage.nextCheckin) {
-      // Se não tiver check-in mas tiver próxima consulta agendada
       setSelectedDateForMessage(selectedPatientForMessage.nextCheckin);
-      setSelectedTimeForMessage('09:00'); // Hora padrão
+      setSelectedTimeForMessage('09:00');
     }
   }, [selectedPatientForMessage]);
 
@@ -206,18 +384,14 @@ const App: React.FC = () => {
 
     const professional = professionals.find(p => p.id === selectedPatientForMessage.professionalId);
     const doctorName = professional ? professional.name : 'Dra. Responsável';
-
-    // Verifica se o paciente tem check-in agendado
+    
     if (!selectedPatientForMessage.lastCheckin && !selectedPatientForMessage.nextCheckin) {
       alert("Este paciente ainda não tem consulta agendada. Faça um check-in primeiro.");
       return;
     }
-
-    // Formatar data
+    
     const dateObj = new Date(selectedDateForMessage);
     const formattedDate = dateObj.toLocaleDateString('pt-BR');
-
-    // Formatar hora
     const formattedTime = selectedTimeForMessage;
 
     const message = `Olá ${selectedPatientForMessage.parent}! Tudo bem? 😊
@@ -235,7 +409,7 @@ Equipe Espaço da Ped`;
   // Função para copiar mensagem
   const copyToClipboard = () => {
     if (!generatedMessage) return;
-
+    
     navigator.clipboard.writeText(generatedMessage)
       .then(() => {
         setIsMessageCopied(true);
@@ -429,46 +603,322 @@ Equipe Espaço da Ped`;
     return matchesSearch && matchesProf && matchesCheckin;
   });
 
+  // Página de Login/Cadastro
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 to-brown-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-10">
+            <div className="flex justify-center items-center gap-3 mb-4">
+              <Baby size={48} weight="fill" className="text-brown-500" />
+            </div>
+            <h1 className="text-4xl font-black text-brown-900 tracking-tight mb-2">
+              PueriCare
+            </h1>
+            <p className="text-brown-500 font-medium">Gestão de rotinas pediátricas</p>
+          </div>
+
+          {/* Botão para voltar do cadastro para login */}
+          {showRegisterForm && (
+            <button
+              onClick={() => {
+                setShowRegisterForm(false);
+                setShowLoginForm(true);
+                setRegisterError('');
+                setRegisterSuccess('');
+              }}
+              className="mb-6 flex items-center gap-2 text-brown-600 hover:text-brown-800 font-medium transition-colors"
+            >
+              <ArrowLeft size={18} />
+              Voltar para o login
+            </button>
+          )}
+
+          {showLoginForm ? (
+            <div className="bg-white rounded-[2rem] shadow-xl border border-brown-100/50 p-8">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-brown-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock size={32} className="text-brown-500" weight="fill" />
+                </div>
+                <h2 className="text-2xl font-black text-brown-900 mb-2">Acesso ao Sistema</h2>
+                <p className="text-stone-500">Digite suas credenciais para continuar</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Usuário</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Digite seu usuário"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Digite sua senha"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
+                    <WarningCircle size={16} />
+                    {loginError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-brown-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-brown-200/50 hover:bg-brown-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <Lock size={20} />
+                  Entrar no Sistema
+                </button>
+
+                <div className="text-center pt-4 border-t border-stone-100">
+                  <p className="text-sm text-stone-500 mb-3">
+                    Ainda não tem uma conta?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLoginForm(false);
+                      setShowRegisterForm(true);
+                      setLoginError('');
+                    }}
+                    className="w-full bg-white text-brown-700 border border-brown-200 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <User size={20} />
+                    Criar Nova Conta
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : showRegisterForm ? (
+            <div className="bg-white rounded-[2rem] shadow-xl border border-brown-100/50 p-8">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <User size={32} className="text-blue-500" weight="fill" />
+                </div>
+                <h2 className="text-2xl font-black text-brown-900 mb-2">Criar Nova Conta</h2>
+                <p className="text-stone-500">Preencha os dados para se cadastrar</p>
+              </div>
+
+              <form onSubmit={handleRegister} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nome Completo *</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="text"
+                      value={registerName}
+                      onChange={(e) => setRegisterName(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Digite seu nome completo"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">E-mail (opcional)</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="email"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="seu@email.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nome de Usuário *</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="text"
+                      value={registerUsername}
+                      onChange={(e) => setRegisterUsername(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Escolha um nome de usuário"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Senha *</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="password"
+                      value={registerPassword}
+                      onChange={(e) => setRegisterPassword(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Mínimo 6 caracteres"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-stone-400 mt-1">Mínimo 6 caracteres</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Confirmar Senha *</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-brown-300" size={20} />
+                    <input
+                      type="password"
+                      value={registerConfirmPassword}
+                      onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-stone-50 focus:border-brown-200 focus:bg-white focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm text-brown-800 placeholder:text-brown-300"
+                      placeholder="Digite a senha novamente"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {registerError && (
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
+                    <WarningCircle size={16} />
+                    {registerError}
+                  </div>
+                )}
+
+                {registerSuccess && (
+                  <div className="p-3 bg-green-50 border border-green-100 rounded-xl text-green-600 text-sm font-medium flex items-center gap-2">
+                    <Check size={16} />
+                    {registerSuccess}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-200/50 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <User size={20} />
+                  Criar Conta
+                </button>
+
+                <div className="text-center pt-4 border-t border-stone-100">
+                  <p className="text-sm text-stone-500">
+                    Já tem uma conta?{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRegisterForm(false);
+                        setShowLoginForm(true);
+                        setRegisterError('');
+                        setRegisterSuccess('');
+                      }}
+                      className="text-blue-600 hover:text-blue-800 font-bold transition-colors"
+                    >
+                      Faça login aqui
+                    </button>
+                  </p>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check size={32} className="text-green-500" weight="bold" />
+              </div>
+              <h2 className="text-2xl font-black text-brown-900 mb-2">Login realizado com sucesso!</h2>
+              <p className="text-stone-500 mb-6">Redirecionando para o sistema...</p>
+              <div className="flex justify-center">
+                <Spinner className="animate-spin text-brown-500" size={32} />
+              </div>
+            </div>
+          )}
+
+          <div className="text-center mt-8 text-stone-400 text-sm">
+            <p>© 2026 PueriCare • Sistema de gestão pediátrica por TomSanbw</p>
+            <p className="mt-1">Versão 1.0.0</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Página Principal (após login)
   return (
     <div className="min-h-screen bg-stone-50 p-4 md:p-8 text-stone-700">
       <div className="max-w-7xl mx-auto">
         <header className="sticky top-0 z-50 bg-stone-50/95 backdrop-blur-sm py-4 -mx-4 md:-mx-8 px-4 md:px-8 border-b border-brown-100/50 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all">
           <div>
-            <h1 className="flex items-center gap-3 text-4xl font-black text-brown-900 tracking-tight mb-1">
-              <Baby weight="fill" className="text-brown-500" />
-              PueriCare
-            </h1>
-            <p className="text-brown-500 font-medium">Gestão de rotinas simplificada</p>
+            <div className="flex items-center gap-3">
+              <h1 className="flex items-center gap-3 text-4xl font-black text-brown-900 tracking-tight">
+                <Baby weight="fill" className="text-brown-500" />
+                PueriCare
+              </h1>
+              <span className={`text-xs font-bold px-2 py-1 rounded-full ${currentUser?.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                {currentUser?.role === 'admin' ? 'Administrador' : 'Usuário'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="text-brown-500 font-medium">Gestão de rotinas simplificada</p>
+              {currentUser && (
+                <span className="text-xs text-stone-400">• Olá, {currentUser.name}</span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3 w-full md:w-auto">
-            <button
-              onClick={() => setIsProfModalOpen(true)}
-              className="bg-white text-brown-700 border border-brown-200 px-5 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center gap-2 shadow-sm hover:shadow-md"
-            >
-              <Stethoscope size={18} />
-              Doutoras
-            </button>
-            <label className={`cursor-pointer bg-white text-brown-600 border border-brown-200 px-5 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center gap-2 shadow-sm hover:shadow-md ${isLibLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              {isLibLoading ? <Spinner className="animate-spin" size={18} /> : <UploadSimple size={18} />}
-              Importar Excel
-              {!isLibLoading && <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={importExcel} />}
-            </label>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-brown-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-brown-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg shadow-brown-200/50"
-            >
-              <Plus size={20} />
-              Novo Paciente
-            </button>
-            {selectedPatients.length > 0 && (
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex flex-wrap gap-3">
               <button
-                onClick={handleMultiDelete}
-                className="bg-red-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg shadow-red-200/50"
+                onClick={() => setIsProfModalOpen(true)}
+                className="bg-white text-brown-700 border border-brown-200 px-5 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center gap-2 shadow-sm hover:shadow-md"
               >
-                <Trash size={18} />
-                Excluir ({selectedPatients.length})
+                <Stethoscope size={18} />
+                Doutoras
               </button>
-            )}
+              <label className={`cursor-pointer bg-white text-brown-600 border border-brown-200 px-5 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center gap-2 shadow-sm hover:shadow-md ${isLibLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                {isLibLoading ? <Spinner className="animate-spin" size={18} /> : <UploadSimple size={18} />}
+                Importar Excel
+                {!isLibLoading && <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={importExcel} />}
+              </label>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-brown-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-brown-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg shadow-brown-200/50"
+              >
+                <Plus size={20} />
+                Novo Paciente
+              </button>
+              {selectedPatients.length > 0 && (
+                <button
+                  onClick={handleMultiDelete}
+                  className="bg-red-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-red-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg shadow-red-200/50"
+                >
+                  <Trash size={18} />
+                  Excluir ({selectedPatients.length})
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="text-stone-400 hover:text-brown-600 font-medium flex items-center gap-2 transition-colors px-4 py-2 hover:bg-stone-100 rounded-xl"
+              title="Sair do sistema"
+            >
+              <Lock size={16} />
+              Sair
+            </button>
           </div>
         </header>
 
@@ -573,8 +1023,8 @@ Equipe Espaço da Ped`;
                         const showFoodAlert = (age.months === 5 && age.days >= 25) || (age.months === 6 && age.days <= 5);
 
                         return (
-                          <tr
-                            key={p.id}
+                          <tr 
+                            key={p.id} 
                             className={`hover:bg-brown-50/50 transition-colors ${isSelected ? 'bg-brown-50' : ''}`}
                           >
                             <td className="px-6 py-5">
@@ -826,7 +1276,7 @@ Equipe Espaço da Ped`;
                         {generatedMessage}
                       </pre>
                     </div>
-
+                    
                     {/* Botão para WhatsApp */}
                     {selectedPatientForMessage?.phone && (
                       <a
@@ -844,16 +1294,16 @@ Equipe Espaço da Ped`;
 
                 {/* Informações do Paciente Selecionado */}
                 {selectedPatientForMessage && (
-                  <div className="mt-3 p-3 rounded-xl border ${selectedPatientForMessage.lastCheckin ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}">
-                    <p className="text-xs font-bold ${selectedPatientForMessage.lastCheckin ? 'text-green-800' : 'text-yellow-800'} mb-1">
+                  <div className={`mt-3 p-3 rounded-xl border ${selectedPatientForMessage.lastCheckin ? 'bg-green-50 border-green-100' : 'bg-yellow-50 border-yellow-100'}`}>
+                    <p className={`text-xs font-bold ${selectedPatientForMessage.lastCheckin ? 'text-green-800' : 'text-yellow-800'} mb-1`}>
                       {selectedPatientForMessage.lastCheckin ? '✓ Consulta agendada' : '⚠️ Sem consulta agendada'}
                     </p>
-                    <p className="text-sm font-medium ${selectedPatientForMessage.lastCheckin ? 'text-green-900' : 'text-yellow-900'}">
+                    <p className={`text-sm font-medium ${selectedPatientForMessage.lastCheckin ? 'text-green-900' : 'text-yellow-900'}`}>
                       {selectedPatientForMessage.name} - {selectedPatientForMessage.parent}
                     </p>
-
+                    
                     {selectedPatientForMessage.lastCheckin && (
-                      <p className="text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1">
+                      <p className={`text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1`}>
                         📅 Última consulta: {new Date(selectedPatientForMessage.lastCheckin).toLocaleDateString('pt-BR')}
                         {selectedPatientForMessage.lastCheckin.includes('T') && (
                           <span className="ml-2">
@@ -862,13 +1312,13 @@ Equipe Espaço da Ped`;
                         )}
                       </p>
                     )}
-
+                    
                     {selectedPatientForMessage.phone && (
-                      <p className="text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1">
+                      <p className={`text-xs ${selectedPatientForMessage.lastCheckin ? 'text-green-700' : 'text-yellow-700'} mt-1`}>
                         📞 {selectedPatientForMessage.phone}
                       </p>
                     )}
-
+                    
                     {!selectedPatientForMessage.lastCheckin && (
                       <p className="text-xs text-yellow-600 mt-2 font-medium">
                         ⚠️ Faça um check-in primeiro para agendar a consulta
@@ -968,45 +1418,45 @@ Equipe Espaço da Ped`;
             <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
               <div>
                 <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nome da Criança</label>
-                <input
-                  required
-                  name="editName"
+                <input 
+                  required 
+                  name="editName" 
                   defaultValue={editingPatient.name}
-                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
-                  placeholder="Ex: Maria Alice"
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                  placeholder="Ex: Maria Alice" 
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Nascimento</label>
-                  <input
-                    required
-                    type="date"
-                    name="editBirthDate"
+                  <input 
+                    required 
+                    type="date" 
+                    name="editBirthDate" 
                     defaultValue={editingPatient.birthDate}
-                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Responsável</label>
-                  <input
-                    required
-                    name="editParent"
+                  <input 
+                    required 
+                    name="editParent" 
                     defaultValue={editingPatient.parent}
-                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
-                    placeholder="Ex: Mãe"
+                    className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                    placeholder="Ex: Mãe" 
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Telefone / WhatsApp</label>
-                <input
-                  name="editPhone"
+                <input 
+                  name="editPhone" 
                   defaultValue={editingPatient.phone || ''}
-                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900"
-                  placeholder="Ex: (11) 99999-9999"
+                  className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" 
+                  placeholder="Ex: (11) 99999-9999" 
                 />
               </div>
 
@@ -1021,12 +1471,12 @@ Equipe Espaço da Ped`;
                   ) : (
                     professionals.map(prof => (
                       <label key={prof.id} className="cursor-pointer">
-                        <input
-                          type="radio"
-                          name="editProfessionalId"
-                          value={prof.id}
+                        <input 
+                          type="radio" 
+                          name="editProfessionalId" 
+                          value={prof.id} 
                           defaultChecked={editingPatient.professionalId === prof.id}
-                          className="peer hidden"
+                          className="peer hidden" 
                         />
                         <div className="p-3 rounded-xl bg-stone-50 border-2 border-transparent peer-checked:border-brown-500 peer-checked:bg-brown-50 text-stone-500 peer-checked:text-brown-700 font-bold text-sm transition-all text-center">
                           {prof.name}
