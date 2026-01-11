@@ -2,16 +2,18 @@ import React, { useState, useEffect } from 'react';
 import {
   Users,
   Plus,
-  FileUp,
-  Search,
-  Trash2,
+  UploadSimple,
+  MagnifyingGlass,
+  Trash,
   X,
-  Calendar,
-  AlertCircle,
-  Loader2,
+  CalendarBlank,
+  WarningCircle,
+  Spinner,
   Stethoscope,
-  Filter,
-} from 'lucide-react';
+  Funnel,
+  Baby,
+  CheckCircle,
+} from '@phosphor-icons/react';
 
 // Tipagens
 interface Professional {
@@ -35,6 +37,7 @@ const App: React.FC = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
+  const [filterCheckin, setFilterCheckin] = useState<string>('all');
 
   // Estados de Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -237,7 +240,12 @@ const App: React.FC = () => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.parent.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProf = filterProfessional === 'all' || p.professionalId === filterProfessional;
-    return matchesSearch && matchesProf;
+    const matchesCheckin = filterCheckin === 'all'
+      ? true
+      : filterCheckin === 'done'
+        ? p.lastCheckin !== null
+        : p.lastCheckin === null;
+    return matchesSearch && matchesProf && matchesCheckin;
   });
 
   return (
@@ -246,7 +254,10 @@ const App: React.FC = () => {
       <div className="max-w-6xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
           <div>
-            <h1 className="text-4xl font-black text-brown-900 tracking-tight mb-1">PueriCare</h1>
+            <h1 className="flex items-center gap-3 text-4xl font-black text-brown-900 tracking-tight mb-1">
+              <Baby weight="fill" className="text-brown-500" />
+              PueriCare
+            </h1>
             <p className="text-brown-500 font-medium">Gestão de rotinas simplificada</p>
           </div>
           <div className="flex flex-wrap gap-3 w-full md:w-auto">
@@ -258,7 +269,7 @@ const App: React.FC = () => {
               Doutoras
             </button>
             <label className={`cursor-pointer bg-white text-brown-600 border border-brown-200 px-5 py-3 rounded-xl font-bold hover:bg-brown-50 transition-all flex items-center gap-2 shadow-sm hover:shadow-md ${isLibLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              {isLibLoading ? <Loader2 className="animate-spin" size={18} /> : <FileUp size={18} />}
+              {isLibLoading ? <Spinner className="animate-spin" size={18} /> : <UploadSimple size={18} />}
               Importar Excel
               {!isLibLoading && <input type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={importExcel} />}
             </label>
@@ -273,9 +284,9 @@ const App: React.FC = () => {
         </header>
 
         {/* Filtros e Busca */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-10">
           <div className="md:col-span-2 relative">
-            <Search className="absolute left-4 top-4 text-brown-300" size={20} />
+            <MagnifyingGlass className="absolute left-4 top-4 text-brown-300" size={20} />
             <input
               type="text"
               placeholder="Buscar por nome ou responsável..."
@@ -285,7 +296,7 @@ const App: React.FC = () => {
             />
           </div>
           <div className="relative">
-            <Filter className="absolute left-4 top-4 text-brown-400" size={20} />
+            <Funnel className="absolute left-4 top-4 text-brown-400" size={20} />
             <select
               value={filterProfessional}
               onChange={(e) => setFilterProfessional(e.target.value)}
@@ -295,6 +306,18 @@ const App: React.FC = () => {
               {professionals.map(prof => (
                 <option key={prof.id} value={prof.id}>{prof.name}</option>
               ))}
+            </select>
+          </div>
+          <div className="relative">
+            <CheckCircle className="absolute left-4 top-4 text-brown-400" size={20} />
+            <select
+              value={filterCheckin}
+              onChange={(e) => setFilterCheckin(e.target.value)}
+              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-transparent bg-white focus:border-brown-200 focus:ring-4 focus:ring-brown-50 outline-none transition-all shadow-sm appearance-none font-bold text-brown-700 cursor-pointer"
+            >
+              <option value="all">Status: Todos</option>
+              <option value="done">Realizado</option>
+              <option value="pending">Pendente</option>
             </select>
           </div>
           <div className="bg-brown-900 text-white rounded-2xl p-3 flex items-center justify-center gap-4 shadow-lg shadow-brown-900/20">
@@ -359,7 +382,7 @@ const App: React.FC = () => {
                             </span>
                             {showFoodAlert && (
                               <div className="flex items-center gap-1 mt-2 text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-100">
-                                <AlertCircle size={10} />
+                                <WarningCircle size={10} />
                                 <span className="text-[10px] font-bold">Intro. Alimentar</span>
                               </div>
                             )}
@@ -400,7 +423,7 @@ const App: React.FC = () => {
                               className="text-stone-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
                               title="Excluir"
                             >
-                              <Trash2 size={16} />
+                              <Trash size={18} />
                             </button>
                           </div>
                         </td>
@@ -449,7 +472,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   {professionals.length === 0 ? (
                     <div className="col-span-2 p-4 bg-orange-50 border border-orange-100 rounded-xl text-orange-600 text-sm font-medium flex items-center gap-2">
-                      <AlertCircle size={16} />
+                      <WarningCircle size={16} />
                       Cadastre uma doutora primeiro
                     </div>
                   ) : (
@@ -500,7 +523,7 @@ const App: React.FC = () => {
                 <div key={prof.id} className="flex justify-between items-center p-4 bg-stone-50 rounded-xl border border-stone-100">
                   <span className="font-bold text-brown-900">{prof.name}</span>
                   <button onClick={() => removeProfessional(prof.id)} className="text-stone-300 hover:text-red-500 transition-colors">
-                    <Trash2 size={18} />
+                    <Trash size={18} />
                   </button>
                 </div>
               ))}
@@ -516,7 +539,7 @@ const App: React.FC = () => {
       {isCheckinModalOpen && (
         <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center">
-            <Calendar size={32} className="mx-auto mb-4 text-brown-500" />
+            <CalendarBlank size={32} className="mx-auto mb-4 text-brown-500" />
             <h3 className="text-xl font-black text-brown-900 mb-6">Data e Hora da Consulta</h3>
             <div className="flex gap-3 mb-6">
               <input
