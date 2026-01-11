@@ -15,6 +15,7 @@ import {
   CheckCircle,
   CheckSquare,
   Square,
+  Phone,
 } from '@phosphor-icons/react';
 
 // Tipagens
@@ -31,6 +32,7 @@ interface Patient {
   lastCheckin: string | null;
   nextCheckin: string | null;
   professionalId: string; // Vínculo com a Dra
+  phone?: string;
 }
 
 interface Todo {
@@ -53,13 +55,17 @@ const App: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCheckinModalOpen, setIsCheckinModalOpen] = useState(false);
   const [isProfModalOpen, setIsProfModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [selectedPatientPhone, setSelectedPatientPhone] = useState<{ name: string, phone: string } | null>(null);
 
   const [checkinTargetId, setCheckinTargetId] = useState<number | null>(null);
   const [checkinDate, setCheckinDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkinTime, setCheckinTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
   const [isLibLoading, setIsLibLoading] = useState(true);
 
-  // Injeção de dependências e fontes
+  // Injeção de dependências e fontes   
   // Injeção de dependências
   useEffect(() => {
     setCheckinTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
@@ -148,7 +154,8 @@ const App: React.FC = () => {
       birthDate: formData.get('birthDate') as string,
       professionalId: profId,
       lastCheckin: null,
-      nextCheckin: null
+      nextCheckin: null,
+      phone: formData.get('phone') as string
     };
     setPatients([...patients, newPatient]);
     setIsAddModalOpen(false);
@@ -192,7 +199,8 @@ const App: React.FC = () => {
           birthDate: String(bDate),
           professionalId: profId,
           lastCheckin: null,
-          nextCheckin: null
+          nextCheckin: null,
+          phone: String(row['Telefone'] || row['Celular'] || row['Contato'] || row['Whatsapp'] || "")
         };
       }).filter(p => p.name && p.birthDate);
 
@@ -248,8 +256,17 @@ const App: React.FC = () => {
     setIsCheckinModalOpen(false);
   };
 
-  const deletePatient = (id: number) => {
-    setPatients(patients.filter(pat => pat.id !== id));
+  const requestDelete = (id: number) => {
+    setDeleteTargetId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTargetId !== null) {
+      setPatients(patients.filter(pat => pat.id !== deleteTargetId));
+      setIsDeleteModalOpen(false);
+      setDeleteTargetId(null);
+    }
   };
 
   const addTodo = (e: React.FormEvent) => {
@@ -396,8 +413,21 @@ const App: React.FC = () => {
                         return (
                           <tr key={p.id} className="hover:bg-brown-50/50 transition-colors">
                             <td className="px-6 py-5">
-                              <p className="font-bold text-brown-900">{p.name}</p>
-                              <p className="text-xs text-brown-400 font-medium">Nasc: {new Date(p.birthDate).toLocaleDateString('pt-BR')}</p>
+                              <div className="flex items-center gap-2">
+                                <div>
+                                  <p className="font-bold text-brown-900">{p.name}</p>
+                                  <p className="text-xs text-brown-400 font-medium">Nasc: {new Date(p.birthDate).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                                {p.phone && (
+                                  <button
+                                    onClick={() => { setSelectedPatientPhone({ name: p.name, phone: p.phone! }); setIsPhoneModalOpen(true); }}
+                                    className="bg-green-100 text-green-600 p-1.5 rounded-full hover:bg-green-200 transition-colors"
+                                    title="Ver Telefone"
+                                  >
+                                    <Phone size={14} weight="fill" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-5 text-brown-600 font-medium">
                               {p.parent}
@@ -460,7 +490,7 @@ const App: React.FC = () => {
                                   Check-in
                                 </button>
                                 <button
-                                  onClick={() => deletePatient(p.id)}
+                                  onClick={() => requestDelete(p.id)}
                                   className="text-stone-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
                                   title="Excluir"
                                 >
@@ -559,6 +589,11 @@ const App: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Telefone / WhatsApp</label>
+                <input name="phone" className="w-full px-4 py-3 bg-stone-50 border-0 rounded-xl focus:ring-2 focus:ring-brown-200 outline-none transition-all font-medium text-brown-900" placeholder="Ex: (11) 99999-9999" />
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-brown-500 uppercase mb-2">Doutora Responsável</label>
                 <div className="grid grid-cols-2 gap-2">
                   {professionals.length === 0 ? (
@@ -653,9 +688,66 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <WarningCircle size={32} className="text-red-500" />
+            </div>
+            <h3 className="text-xl font-black text-brown-900 mb-2">Excluir Paciente?</h3>
+            <p className="text-stone-500 font-medium mb-8">Esta ação não poderá ser desfeita.</p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="flex-1 py-3 font-bold text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black shadow-lg shadow-red-200 hover:bg-red-600 transition-all"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPhoneModalOpen && selectedPatientPhone && (
+        <div className="fixed inset-0 bg-stone-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center relative">
+            <button
+              onClick={() => setIsPhoneModalOpen(false)}
+              className="absolute right-6 top-6 text-stone-300 hover:text-stone-500 transition-colors"
+            >
+              <X size={24} />
+            </button>
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Phone size={32} className="text-green-600" weight="fill" />
+            </div>
+            <h3 className="text-xl font-black text-brown-900 mb-1">Contato</h3>
+            <p className="text-stone-400 font-medium mb-6">{selectedPatientPhone.name}</p>
+
+            <div className="bg-stone-50 p-4 rounded-xl border border-stone-100 mb-6">
+              <a href={`tel:${selectedPatientPhone.phone}`} className="text-2xl font-black text-brown-800 hover:text-green-600 transition-colors">
+                {selectedPatientPhone.phone}
+              </a>
+            </div>
+
+            <button
+              onClick={() => setIsPhoneModalOpen(false)}
+              className="w-full bg-brown-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-brown-200 hover:bg-brown-700 transition-all"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default App;
-// trigger deploy 2
